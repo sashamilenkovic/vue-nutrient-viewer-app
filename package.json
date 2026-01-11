@@ -1,0 +1,19 @@
+{
+  "name": "nutrient-viewer-poc",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:web": "pnpm --filter @nutrient-viewer-poc/web dev",
+    "dev:server": "pnpm --filter @nutrient-viewer-poc/server dev",
+    "build": "pnpm -r build",
+    "type-check": "pnpm -r type-check"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}
