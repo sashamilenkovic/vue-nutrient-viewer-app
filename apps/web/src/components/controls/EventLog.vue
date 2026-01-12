@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { NutrientViewerInstance } from '@/composables/useNutrientViewer'
+import type NutrientViewer from '@nutrient-sdk/viewer'
 import { useViewerEvents, type ViewerEvent } from '@/composables/useViewerEvents'
+
+type Instance = InstanceType<typeof NutrientViewer.Instance>
 
 // =============================================================================
 // PROPS & STATE
 // =============================================================================
 
 const props = defineProps<{
-  viewerInstance: NutrientViewerInstance | null
+  viewerInstance: Instance | null
 }>()
 
 const instanceRef = computed(() => props.viewerInstance)

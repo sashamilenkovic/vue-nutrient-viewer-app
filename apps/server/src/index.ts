@@ -1,4 +1,4 @@
-import { createApp, createRouter, eventHandler, toNodeListener } from 'h3'
+import { createApp, toNodeListener } from 'h3'
 import { listen } from 'listhen'
 import { config } from 'dotenv'
 
@@ -9,19 +9,10 @@ import { documentRoutes } from './routes/documents'
 config({ path: '../../.env' })
 
 const app = createApp()
-const router = createRouter()
 
-// Health check
-router.get(
-  '/',
-  eventHandler(() => ({ status: 'ok', service: 'nutrient-viewer-poc-server' }))
-)
-
-// Mount routes
-router.use('/api/**', jwtRoutes.handler)
-router.use('/api/**', documentRoutes.handler)
-
-app.use(router)
+// Mount route handlers directly
+app.use(jwtRoutes)
+app.use(documentRoutes)
 
 const port = process.env.SERVER_PORT || 3001
 

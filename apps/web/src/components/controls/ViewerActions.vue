@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { NutrientViewerInstance } from '@/composables/useNutrientViewer'
-import { useViewerActions, type ZoomMode } from '@/composables/useViewerActions'
+import type NutrientViewer from '@nutrient-sdk/viewer'
+import { useViewerActions } from '@/composables/useViewerActions'
+
+type Instance = InstanceType<typeof NutrientViewer.Instance>
 
 // =============================================================================
 // PROPS & STATE
 // =============================================================================
 
 const props = defineProps<{
-  viewerInstance: NutrientViewerInstance | null
+  viewerInstance: Instance | null
 }>()
 
 const instanceRef = computed(() => props.viewerInstance)
@@ -110,7 +112,7 @@ async function handleExportPdf() {
 function handleZoomSelect(event: Event) {
   const value = (event.target as HTMLSelectElement).value
   if (value === 'FIT_TO_WIDTH' || value === 'FIT_TO_VIEWPORT' || value === 'AUTO') {
-    setZoom(value as ZoomMode)
+    setZoom(value)
   } else {
     setZoom(parseFloat(value))
   }

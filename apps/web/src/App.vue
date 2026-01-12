@@ -1,28 +1,22 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import type { Instance } from '@nutrient-sdk/viewer'
 import DocumentViewer from '@/components/DocumentViewer.vue'
 import ControlPanel from '@/components/ControlPanel.vue'
-import type { NutrientViewerInstance } from '@/composables/useNutrientViewer'
-import type { ViewerMode } from '@/components/controls/DocumentSelector.vue'
 
 const viewerRef = ref<InstanceType<typeof DocumentViewer> | null>(null)
-const viewerInstance = ref<NutrientViewerInstance | null>(null)
+const viewerInstance = ref<Instance | null>(null)
 const currentPage = ref(0)
 const totalPages = ref(0)
 
-// Viewer mode: standalone (local PDFs) or document-engine (server)
-const viewerMode = ref<ViewerMode>('standalone')
-
-// Document source - can be URL string, ArrayBuffer, or documentId
-const documentUrl = ref<string | undefined>('/samples/example.pdf')
-const documentData = ref<ArrayBuffer | undefined>(undefined)
+// Document source - documentId for Document Engine
 const documentId = ref<string | undefined>(undefined)
-const currentDocumentName = ref('example.pdf')
+const currentDocumentName = ref('No document loaded')
 
 // Document Engine URL from environment
 const serverUrl = computed(() => import.meta.env.VITE_DE_URL || 'http://localhost:5000')
 
-function handleViewerLoaded(instance: NutrientViewerInstance) {
+function handleViewerLoaded(instance: Instance) {
   viewerInstance.value = instance
   totalPages.value = instance.totalPageCount
   currentPage.value = instance.viewState.currentPageIndex
@@ -40,43 +34,9 @@ function handleAnnotationsChange() {
   console.log('Annotations changed')
 }
 
-function handleLoadDocumentUrl(url: string, name: string) {
-  // Clear other sources, set URL
-  documentData.value = undefined
-  documentId.value = undefined
-  documentUrl.value = url
-  currentDocumentName.value = name
-}
-
-function handleLoadDocumentData(data: ArrayBuffer, name: string) {
-  // Clear other sources, set file data
-  documentUrl.value = undefined
-  documentId.value = undefined
-  documentData.value = data
-  currentDocumentName.value = name
-}
-
 function handleLoadDocumentId(id: string, name: string) {
-  // Clear other sources, set documentId for Document Engine mode
-  documentUrl.value = undefined
-  documentData.value = undefined
   documentId.value = id
   currentDocumentName.value = name
-}
-
-function handleModeChange(mode: ViewerMode) {
-  viewerMode.value = mode
-  // Clear current document when switching modes
-  if (mode === 'standalone') {
-    documentId.value = undefined
-    documentUrl.value = '/samples/example.pdf'
-    currentDocumentName.value = 'example.pdf'
-  } else {
-    documentUrl.value = undefined
-    documentData.value = undefined
-    documentId.value = undefined
-    currentDocumentName.value = 'No document loaded'
-  }
 }
 </script>
 
@@ -94,19 +54,13 @@ function handleModeChange(mode: ViewerMode) {
           :current-page="currentPage"
           :total-pages="totalPages"
           :current-document-name="currentDocumentName"
-          :viewer-mode="viewerMode"
-          @load-document-url="handleLoadDocumentUrl"
-          @load-document-data="handleLoadDocumentData"
           @load-document-id="handleLoadDocumentId"
-          @update:viewer-mode="handleModeChange"
         />
       </aside>
 
       <section class="app__viewer">
         <DocumentViewer
           ref="viewerRef"
-          :document-url="documentUrl"
-          :document-data="documentData"
           :document-id="documentId"
           :server-url="serverUrl"
           @loaded="handleViewerLoaded"

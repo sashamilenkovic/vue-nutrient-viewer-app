@@ -1,61 +1,40 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
-export interface PredefinedDocument {
-  id: string
-  name: string
-  url: string
-}
-
 export interface ServerDocument {
-  document_id: string
+  id: string
   title?: string
   created_at?: string
 }
-
-export type ViewerMode = 'standalone' | 'document-engine'
 
 // =============================================================================
 // PROPS & EMITS
 // =============================================================================
 
-const props = withDefaults(
-  defineProps<{
-    predefinedDocuments?: PredefinedDocument[]
-    currentDocumentName?: string
-    mode?: ViewerMode
-  }>(),
-  {
-    predefinedDocuments: () => [],
-    mode: 'standalone',
-  },
-)
+defineProps<{
+  currentDocumentName?: string
+}>()
 
 const emit = defineEmits<{
-  selectUrl: [url: string, name: string]
-  selectFile: [data: ArrayBuffer, name: string]
   selectDocumentId: [documentId: string, name: string]
-  'update:mode': [mode: ViewerMode]
 }>()
 
 // =============================================================================
 // STATE
 // =============================================================================
 
-const selectedDocumentId = ref('')
 const uploadedFileName = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isUploading = ref(false)
 
-// Document Engine state
 const serverDocuments = ref<ServerDocument[]>([])
 const isLoadingDocuments = ref(false)
 const serverError = ref<string | null>(null)
-const selectedServerDocId = ref('')
+const selectedDocId = ref('')
 
 // =============================================================================
 // COMPUTED
@@ -65,19 +44,19 @@ const displayName = computed(() => {
   if (uploadedFileName.value) {
     return uploadedFileName.value
   }
-  if (props.currentDocumentName) {
-    return props.currentDocumentName
+  // Find selected document name
+  const doc = serverDocuments.value.find((d) => d.id === selectedDocId.value)
+  if (doc) {
+    return doc.title || doc.id
   }
   return 'No document loaded'
 })
-
-const isDocumentEngineMode = computed(() => props.mode === 'document-engine')
 
 // =============================================================================
 // DOCUMENT ENGINE API
 // =============================================================================
 
-async function fetchServerDocuments() {
+async function fetchDocuments() {
   isLoadingDocuments.value = true
   serverError.value = null
 
@@ -89,6 +68,15 @@ async function fetchServerDocuments() {
     }
     const data = await response.json()
     serverDocuments.value = data.data || data || []
+
+    // Auto-select first document if none selected and documents exist
+    if (!selectedDocId.value && serverDocuments.value.length > 0) {
+      const firstDoc = serverDocuments.value[0]
+      if (firstDoc) {
+        selectedDocId.value = firstDoc.id
+        emit('selectDocumentId', firstDoc.id, firstDoc.title || firstDoc.id)
+      }
+    }
   } catch (error) {
     serverError.value = error instanceof Error ? error.message : 'Failed to fetch documents'
     console.error('Failed to fetch documents:', error)
@@ -133,34 +121,15 @@ async function deleteFromServer(documentId: string): Promise<void> {
 // HANDLERS
 // =============================================================================
 
-function handleModeChange(event: Event) {
-  const select = event.target as HTMLSelectElement
-  emit('update:mode', select.value as ViewerMode)
-}
-
 function handleSelectDocument(event: Event) {
   const select = event.target as HTMLSelectElement
   const documentId = select.value
 
   if (!documentId) return
 
-  const document = props.predefinedDocuments.find((d) => d.id === documentId)
-  if (document) {
-    selectedDocumentId.value = documentId
-    uploadedFileName.value = null
-    emit('selectUrl', document.url, document.name)
-  }
-}
-
-function handleSelectServerDocument(event: Event) {
-  const select = event.target as HTMLSelectElement
-  const documentId = select.value
-
-  if (!documentId) return
-
-  const doc = serverDocuments.value.find((d) => d.document_id === documentId)
+  const doc = serverDocuments.value.find((d) => d.id === documentId)
   if (doc) {
-    selectedServerDocId.value = documentId
+    selectedDocId.value = documentId
     uploadedFileName.value = null
     emit('selectDocumentId', documentId, doc.title || documentId)
   }
@@ -179,30 +148,15 @@ async function handleFileChange(event: Event) {
   isUploading.value = true
 
   try {
-    if (isDocumentEngineMode.value) {
-      // Upload to Document Engine
-      const documentId = await uploadToServer(file)
-      uploadedFileName.value = file.name
-      selectedDocumentId.value = ''
-      selectedServerDocId.value = documentId
-      emit('selectDocumentId', documentId, file.name)
-      // Refresh document list
-      await fetchServerDocuments()
-    } else {
-      // Standalone mode - validate PDF and load locally
-      if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-        alert('Please select a PDF file (or use Document Engine mode for Office files)')
-        input.value = ''
-        return
-      }
-      const arrayBuffer = await file.arrayBuffer()
-      uploadedFileName.value = file.name
-      selectedDocumentId.value = ''
-      emit('selectFile', arrayBuffer, file.name)
-    }
+    const documentId = await uploadToServer(file)
+    uploadedFileName.value = file.name
+    selectedDocId.value = documentId
+    emit('selectDocumentId', documentId, file.name)
+    // Refresh document list
+    await fetchDocuments()
   } catch (error) {
-    console.error('Failed to handle file:', error)
-    alert(error instanceof Error ? error.message : 'Failed to handle file')
+    console.error('Failed to upload file:', error)
+    alert(error instanceof Error ? error.message : 'Failed to upload file')
   } finally {
     isUploading.value = false
     input.value = '' // Reset input for re-upload of same file
@@ -215,20 +169,11 @@ function handleClearUpload() {
     fileInputRef.value.value = ''
   }
 
-  if (isDocumentEngineMode.value) {
-    // In DE mode, select first server document
-    const firstDoc = serverDocuments.value[0]
-    if (firstDoc) {
-      selectedServerDocId.value = firstDoc.document_id
-      emit('selectDocumentId', firstDoc.document_id, firstDoc.title || firstDoc.document_id)
-    }
-  } else {
-    // Reload the first predefined document as default
-    const defaultDoc = props.predefinedDocuments[0]
-    if (defaultDoc) {
-      selectedDocumentId.value = defaultDoc.id
-      emit('selectUrl', defaultDoc.url, defaultDoc.name)
-    }
+  // Select first server document
+  const firstDoc = serverDocuments.value[0]
+  if (firstDoc) {
+    selectedDocId.value = firstDoc.id
+    emit('selectDocumentId', firstDoc.id, firstDoc.title || firstDoc.id)
   }
 }
 
@@ -237,10 +182,10 @@ async function handleDeleteDocument(documentId: string) {
 
   try {
     await deleteFromServer(documentId)
-    await fetchServerDocuments()
+    await fetchDocuments()
     // If we deleted the currently selected document, clear selection
-    if (selectedServerDocId.value === documentId) {
-      selectedServerDocId.value = ''
+    if (selectedDocId.value === documentId) {
+      selectedDocId.value = ''
       uploadedFileName.value = null
     }
   } catch (error) {
@@ -249,54 +194,20 @@ async function handleDeleteDocument(documentId: string) {
 }
 
 function handleRefreshDocuments() {
-  fetchServerDocuments()
+  fetchDocuments()
 }
 
 // =============================================================================
 // LIFECYCLE
 // =============================================================================
 
-// Fetch documents when switching to DE mode
-watch(
-  () => props.mode,
-  (newMode) => {
-    if (newMode === 'document-engine') {
-      fetchServerDocuments()
-    }
-  },
-)
-
 onMounted(() => {
-  if (props.mode === 'document-engine') {
-    fetchServerDocuments()
-  }
-})
-
-// Accept file types based on mode
-const acceptedFileTypes = computed(() => {
-  if (isDocumentEngineMode.value) {
-    return '.pdf,.docx,.xlsx,.pptx,.doc,.xls,.ppt'
-  }
-  return '.pdf'
+  fetchDocuments()
 })
 </script>
 
 <template>
   <div class="document-selector">
-    <!-- Mode Toggle -->
-    <div class="document-selector__group">
-      <label class="document-selector__label" for="mode-select">Mode</label>
-      <select
-        id="mode-select"
-        class="document-selector__select"
-        :value="mode"
-        @change="handleModeChange"
-      >
-        <option value="standalone">Standalone (Local PDFs)</option>
-        <option value="document-engine">Document Engine (Server)</option>
-      </select>
-    </div>
-
     <!-- Current Document Display -->
     <div class="document-selector__current">
       <span class="document-selector__current-label">Current:</span>
@@ -305,33 +216,11 @@ const acceptedFileTypes = computed(() => {
       </span>
     </div>
 
-    <!-- Standalone Mode: Predefined Documents -->
-    <div v-if="!isDocumentEngineMode && predefinedDocuments.length > 0" class="document-selector__group">
-      <label class="document-selector__label" for="predefined-select">
-        Sample Documents
-      </label>
-      <select
-        id="predefined-select"
-        class="document-selector__select"
-        :value="selectedDocumentId"
-        @change="handleSelectDocument"
-      >
-        <option value="">Select a document...</option>
-        <option
-          v-for="doc in predefinedDocuments"
-          :key="doc.id"
-          :value="doc.id"
-        >
-          {{ doc.name }}
-        </option>
-      </select>
-    </div>
-
-    <!-- Document Engine Mode: Server Documents -->
-    <div v-if="isDocumentEngineMode" class="document-selector__group">
+    <!-- Server Documents -->
+    <div class="document-selector__group">
       <div class="document-selector__label-row">
         <label class="document-selector__label" for="server-select">
-          Server Documents
+          Documents
         </label>
         <button
           class="document-selector__icon-btn"
@@ -351,27 +240,27 @@ const acceptedFileTypes = computed(() => {
         v-else
         id="server-select"
         class="document-selector__select"
-        :value="selectedServerDocId"
+        :value="selectedDocId"
         :disabled="isLoadingDocuments"
-        @change="handleSelectServerDocument"
+        @change="handleSelectDocument"
       >
         <option value="">
           {{ isLoadingDocuments ? 'Loading...' : 'Select a document...' }}
         </option>
         <option
           v-for="doc in serverDocuments"
-          :key="doc.document_id"
-          :value="doc.document_id"
+          :key="doc.id"
+          :value="doc.id"
         >
-          {{ doc.title || doc.document_id }}
+          {{ doc.title || doc.id }}
         </option>
       </select>
 
       <!-- Delete button for selected document -->
       <button
-        v-if="selectedServerDocId"
+        v-if="selectedDocId"
         class="document-selector__delete-btn"
-        @click="handleDeleteDocument(selectedServerDocId)"
+        @click="handleDeleteDocument(selectedDocId)"
       >
         Delete Selected Document
       </button>
@@ -379,10 +268,8 @@ const acceptedFileTypes = computed(() => {
 
     <!-- File Upload -->
     <div class="document-selector__group">
-      <span class="document-selector__label">
-        {{ isDocumentEngineMode ? 'Upload File' : 'Upload PDF' }}
-      </span>
-      <div class="document-selector__hint" v-if="isDocumentEngineMode">
+      <span class="document-selector__label">Upload File</span>
+      <div class="document-selector__hint">
         Supports PDF, Word, Excel, PowerPoint
       </div>
       <div class="document-selector__upload-row">
@@ -407,7 +294,7 @@ const acceptedFileTypes = computed(() => {
       <input
         ref="fileInputRef"
         type="file"
-        :accept="acceptedFileTypes"
+        accept=".pdf,.docx,.xlsx,.pptx,.doc,.xls,.ppt"
         class="document-selector__file-input"
         @change="handleFileChange"
       />

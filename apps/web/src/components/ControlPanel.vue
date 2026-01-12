@@ -1,42 +1,32 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { NutrientViewerInstance } from '@/composables/useNutrientViewer'
-import DocumentSelector, { type PredefinedDocument, type ViewerMode } from '@/components/controls/DocumentSelector.vue'
+import type NutrientViewer from '@nutrient-sdk/viewer'
+import DocumentSelector from '@/components/controls/DocumentSelector.vue'
 import ViewerActions from '@/components/controls/ViewerActions.vue'
 import AnnotationTools from '@/components/controls/AnnotationTools.vue'
 import LayerControls from '@/components/controls/LayerControls.vue'
 import EventLog from '@/components/controls/EventLog.vue'
 
+type Instance = InstanceType<typeof NutrientViewer.Instance>
+
 // =============================================================================
 // PROPS
 // =============================================================================
 
-const props = defineProps<{
-  viewerInstance: NutrientViewerInstance | null
+defineProps<{
+  viewerInstance: Instance | null
   currentPage: number
   totalPages: number
   currentDocumentName?: string
-  viewerMode?: ViewerMode
 }>()
 
 const emit = defineEmits<{
-  loadDocumentUrl: [url: string, name: string]
-  loadDocumentData: [data: ArrayBuffer, name: string]
   loadDocumentId: [documentId: string, name: string]
-  'update:viewerMode': [mode: ViewerMode]
 }>()
 
 // =============================================================================
 // STATE
 // =============================================================================
-
-// Predefined sample documents
-const predefinedDocuments: PredefinedDocument[] = [
-  { id: 'example', name: 'Example PDF', url: '/samples/example.pdf' },
-  { id: 'invoice', name: 'Invoice', url: '/samples/Invoice.pdf' },
-  { id: 'schedule', name: 'Schedule', url: '/samples/Schedule.pdf' },
-  { id: 'wine', name: 'Wine Label', url: '/samples/wine.pdf' },
-]
 
 // Collapsible sections
 const sections = ref({
@@ -51,20 +41,8 @@ const sections = ref({
 // HANDLERS
 // =============================================================================
 
-function handleSelectUrl(url: string, name: string) {
-  emit('loadDocumentUrl', url, name)
-}
-
-function handleSelectFile(data: ArrayBuffer, name: string) {
-  emit('loadDocumentData', data, name)
-}
-
 function handleSelectDocumentId(documentId: string, name: string) {
   emit('loadDocumentId', documentId, name)
-}
-
-function handleModeChange(mode: ViewerMode) {
-  emit('update:viewerMode', mode)
 }
 
 function toggleSection(section: keyof typeof sections.value) {
@@ -87,13 +65,8 @@ function toggleSection(section: keyof typeof sections.value) {
 
       <div v-show="sections.document" class="control-panel__content">
         <DocumentSelector
-          :predefined-documents="predefinedDocuments"
           :current-document-name="currentDocumentName"
-          :mode="props.viewerMode"
-          @select-url="handleSelectUrl"
-          @select-file="handleSelectFile"
           @select-document-id="handleSelectDocumentId"
-          @update:mode="handleModeChange"
         />
 
         <div class="control-panel__group control-panel__group--spaced">

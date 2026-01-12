@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useNutrientViewer, type NutrientViewerInstance, type DocumentSource } from '@/composables/useNutrientViewer'
+import type NutrientViewer from '@nutrient-sdk/viewer'
+import { useNutrientViewer } from '@/composables/useNutrientViewer'
+
+type Instance = InstanceType<typeof NutrientViewer.Instance>
 
 const props = withDefaults(
   defineProps<{
-    documentUrl?: string
-    documentData?: ArrayBuffer
     documentId?: string
     serverUrl?: string
-    authToken?: string
     theme?: 'LIGHT' | 'DARK'
   }>(),
   {
@@ -17,7 +17,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  loaded: [instance: NutrientViewerInstance]
+  loaded: [instance: Instance]
   error: [error: Error]
   pageChange: [pageIndex: number]
   annotationsChange: []
@@ -27,26 +27,14 @@ const containerRef = ref<HTMLElement | null>(null)
 
 const { instance, isLoading, error, load, unload } = useNutrientViewer({
   serverUrl: props.serverUrl,
-  authToken: props.authToken,
   theme: props.theme,
 })
 
 async function loadDocument() {
-  if (!containerRef.value) return
-
-  let documentSource: DocumentSource | '' = ''
-  if (props.documentId) {
-    documentSource = { documentId: props.documentId }
-  } else if (props.documentData) {
-    documentSource = props.documentData
-  } else if (props.documentUrl) {
-    documentSource = props.documentUrl
-  }
-
-  if (!documentSource) return
+  if (!containerRef.value || !props.documentId) return
 
   try {
-    await load(containerRef.value, documentSource)
+    await load(containerRef.value, props.documentId)
 
     if (instance.value) {
       emit('loaded', instance.value)
@@ -67,15 +55,15 @@ async function loadDocument() {
   }
 }
 
-// Load document when component mounts or props change
+// Load document when component mounts or documentId changes
 onMounted(() => {
-  if (props.documentUrl || props.documentData || props.documentId) {
+  if (props.documentId) {
     loadDocument()
   }
 })
 
 watch(
-  () => [props.documentUrl, props.documentData, props.documentId],
+  () => props.documentId,
   () => {
     loadDocument()
   },
