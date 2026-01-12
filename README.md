@@ -52,20 +52,37 @@ openssl rsa -in private.pem -pubout -out public.pem
 cp .env.example .env
 ```
 
-Edit `.env` and add your JWT keys:
+Edit `.env` with your configuration:
 
+#### Document Engine Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DE_URL` | `http://localhost:5000` | Document Engine URL (server-side) |
+| `DE_API_AUTH_TOKEN` | `secret` | Token for server-to-DE authentication |
+| `DE_SECRET_KEY_BASE` | - | Encryption key (change in production) |
+| `DE_DASHBOARD_USERNAME` | `dashboard` | Dashboard login username |
+| `DE_DASHBOARD_PASSWORD` | `secret` | Dashboard login password |
+| `DE_ACTIVATION_KEY` | - | License key (empty for trial mode) |
+
+#### JWT Authentication
+
+| Variable | Description |
+|----------|-------------|
+| `DE_JWT_PRIVATE_KEY` | RSA private key for signing JWTs (server-side) |
+| `DE_JWT_PUBLIC_KEY` | RSA public key for verifying JWTs (Document Engine) |
+
+**Tip:** Format keys for .env (replace newlines with `\n`):
 ```bash
-# For DE_JWT_PRIVATE_KEY, use the contents of private.pem
-# Replace newlines with \n or use multiline syntax
-
-# For DE_JWT_PUBLIC_KEY, use the contents of public.pem
-```
-
-**Tip:** To format the key for .env:
-```bash
-# Linux/Mac
 awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' private.pem
 ```
+
+#### Server & Client
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_PORT` | `3001` | Port for the h3 API server |
+| `VITE_DE_URL` | `http://localhost:5000` | Document Engine URL (client-side, must be accessible from browser) |
 
 ### 4. Start Document Engine
 
