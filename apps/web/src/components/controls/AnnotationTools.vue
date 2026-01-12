@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type NutrientViewer from '@nutrient-sdk/viewer'
-import { useAnnotations, type AnnotationData } from '@/composables/useAnnotations'
+import { useAnnotations, type AnnotationMode } from '@/composables/useAnnotations'
 import { useViewerActions } from '@/composables/useViewerActions'
 
 type Instance = InstanceType<typeof NutrientViewer.Instance>
@@ -19,11 +19,29 @@ const instanceRef = computed(() => props.viewerInstance)
 const {
   annotations,
   isLoading,
+  currentMode,
+  setAnnotationMode,
   createTextAnnotation,
+  createImageAnnotation,
   deleteAnnotation,
   refreshAnnotations,
   exportInstantJson,
 } = useAnnotations({ instance: instanceRef })
+
+// Annotation mode options
+const annotationModes: { mode: AnnotationMode; label: string; icon: string }[] = [
+  { mode: null, label: 'Pan', icon: '✋' },
+  { mode: 'INK', label: 'Ink', icon: '✏️' },
+  { mode: 'TEXT_HIGHLIGHTER', label: 'Highlight', icon: '🖍️' },
+  { mode: 'SHAPE_RECTANGLE', label: 'Rect', icon: '⬜' },
+  { mode: 'SHAPE_ELLIPSE', label: 'Ellipse', icon: '⭕' },
+  { mode: 'SHAPE_LINE', label: 'Line', icon: '📏' },
+  { mode: 'SHAPE_POLYLINE', label: 'Polyline', icon: '〰️' },
+]
+
+function handleModeChange(mode: AnnotationMode) {
+  setAnnotationMode(mode)
+}
 
 const { currentPage } = useViewerActions({ instance: instanceRef })
 
@@ -32,12 +50,41 @@ const annotationText = ref('')
 const customDataKey = ref('')
 const customDataValue = ref('')
 
+// Image annotation state
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const isAddingImage = ref(false)
+
 // Export state
 const exportedJson = ref<string | null>(null)
 
 // =============================================================================
 // HANDLERS
 // =============================================================================
+
+function handleImageUploadClick() {
+  imageInputRef.value?.click()
+}
+
+async function handleImageFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
+  if (!file) return
+
+  isAddingImage.value = true
+
+  try {
+    await createImageAnnotation({
+      pageIndex: currentPage.value,
+      imageBlob: file,
+    })
+  } catch (error) {
+    console.error('Failed to add image annotation:', error)
+  } finally {
+    isAddingImage.value = false
+    input.value = '' // Reset for re-upload
+  }
+}
 
 async function handleCreateAnnotation() {
   if (!annotationText.value.trim()) return
@@ -113,6 +160,52 @@ watch(instanceRef, async (newInstance) => {
 
 <template>
   <div class="annotation-tools">
+    <!-- Annotation Mode Selector -->
+    <div class="annotation-tools__group">
+      <span class="annotation-tools__label">Annotation Mode</span>
+      <div class="annotation-tools__modes">
+        <button
+          v-for="{ mode, label, icon } in annotationModes"
+          :key="label"
+          class="annotation-tools__mode-btn"
+          :class="{ 'annotation-tools__mode-btn--active': currentMode === mode }"
+          :disabled="!viewerInstance"
+          :title="label"
+          @click="handleModeChange(mode)"
+        >
+          <span class="annotation-tools__mode-icon">{{ icon }}</span>
+          <span class="annotation-tools__mode-label">{{ label }}</span>
+        </button>
+      </div>
+      <div v-if="currentMode" class="annotation-tools__mode-hint">
+        <template v-if="currentMode === 'INK'">Draw freely on the document</template>
+        <template v-else-if="currentMode === 'TEXT_HIGHLIGHTER'">Select text to highlight it</template>
+        <template v-else-if="currentMode?.startsWith('SHAPE_')">Click and drag to draw</template>
+      </div>
+    </div>
+
+    <!-- Add Image Annotation (One-Click Example) -->
+    <div class="annotation-tools__group">
+      <span class="annotation-tools__label">Add Image Annotation</span>
+      <div class="annotation-tools__hint">
+        PNG, JPG, GIF, WebP - added to current page instantly
+      </div>
+      <button
+        class="annotation-tools__btn annotation-tools__btn--primary"
+        :disabled="!viewerInstance || isAddingImage"
+        @click="handleImageUploadClick"
+      >
+        {{ isAddingImage ? 'Adding...' : 'Choose Image' }}
+      </button>
+      <input
+        ref="imageInputRef"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        class="annotation-tools__file-input"
+        @change="handleImageFileChange"
+      />
+    </div>
+
     <!-- Create Annotation -->
     <div class="annotation-tools__group">
       <span class="annotation-tools__label">Create Text Annotation</span>
@@ -239,13 +332,13 @@ watch(instanceRef, async (newInstance) => {
 .annotation-tools {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .annotation-tools__group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 
 .annotation-tools__label {
@@ -262,6 +355,79 @@ watch(instanceRef, async (newInstance) => {
 .annotation-tools__count {
   font-weight: 400;
   text-transform: none;
+}
+
+.annotation-tools__modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.375rem;
+}
+
+.annotation-tools__mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.5rem 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.annotation-tools__mode-btn:hover:not(:disabled) {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.annotation-tools__mode-btn--active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.annotation-tools__mode-btn--active:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: #fff;
+}
+
+.annotation-tools__mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.annotation-tools__mode-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.annotation-tools__mode-label {
+  font-weight: 500;
+}
+
+.annotation-tools__mode-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  padding: 0.25rem 0;
+}
+
+.annotation-tools__hint {
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.annotation-tools__file-input {
+  display: none;
 }
 
 .annotation-tools__form {

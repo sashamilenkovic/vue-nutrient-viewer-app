@@ -1,5 +1,5 @@
 import { createRouter, eventHandler, readBody, createError } from 'h3'
-import { generateDocumentEngineJWT, generateJWTWithPermissions } from '../utils/jwt'
+import { generateDocumentEngineJWT, generateJWTWithPermissions, generateJWTForLayer } from '../utils/jwt'
 
 export const jwtRoutes = createRouter()
 
@@ -7,8 +7,11 @@ export const jwtRoutes = createRouter()
  * POST /api/jwt
  * Generate a JWT for accessing a document in Document Engine
  *
- * Body: { documentId: string, permissions?: string[] }
+ * Body: { documentId: string, permissions?: string[], layer?: string }
  * Returns: { jwt: string }
+ *
+ * If layer is provided, the JWT will be scoped to that Instant Layer.
+ * Instant Layers are annotation containers - each layer has its own set of annotations.
  */
 jwtRoutes.post(
   '/api/jwt',
@@ -23,9 +26,16 @@ jwtRoutes.post(
         })
       }
 
-      const token = body.permissions
-        ? generateJWTWithPermissions(body.documentId, body.permissions)
-        : generateDocumentEngineJWT(body.documentId)
+      let token: string
+
+      // If layer is specified, generate a layer-scoped JWT
+      if (typeof body.layer === 'string') {
+        token = generateJWTForLayer(body.documentId, body.layer, body.permissions)
+      } else if (body.permissions) {
+        token = generateJWTWithPermissions(body.documentId, body.permissions)
+      } else {
+        token = generateDocumentEngineJWT(body.documentId)
+      }
 
       return { jwt: token }
     } catch (error) {

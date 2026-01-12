@@ -332,13 +332,13 @@ const canSearchNext = computed(() =>
 .viewer-actions {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .viewer-actions__group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 
 .viewer-actions__label {

@@ -13,6 +13,9 @@ const totalPages = ref(0)
 const documentId = ref<string | undefined>(undefined)
 const currentDocumentName = ref('No document loaded')
 
+// Instant Layer - annotation container
+const currentLayer = ref<string | undefined>(undefined)
+
 // Document Engine URL from environment
 const serverUrl = computed(() => import.meta.env.VITE_DE_URL || 'http://localhost:5000')
 
@@ -37,6 +40,12 @@ function handleAnnotationsChange() {
 function handleLoadDocumentId(id: string, name: string) {
   documentId.value = id
   currentDocumentName.value = name
+  // Reset to default layer when loading a new document
+  currentLayer.value = undefined
+}
+
+function handleSwitchLayer(layerName: string) {
+  currentLayer.value = layerName
 }
 </script>
 
@@ -54,7 +63,10 @@ function handleLoadDocumentId(id: string, name: string) {
           :current-page="currentPage"
           :total-pages="totalPages"
           :current-document-name="currentDocumentName"
+          :current-document-id="documentId"
+          :current-layer="currentLayer"
           @load-document-id="handleLoadDocumentId"
+          @switch-layer="handleSwitchLayer"
         />
       </aside>
 
@@ -62,6 +74,7 @@ function handleLoadDocumentId(id: string, name: string) {
         <DocumentViewer
           ref="viewerRef"
           :document-id="documentId"
+          :layer="currentLayer"
           :server-url="serverUrl"
           @loaded="handleViewerLoaded"
           @error="handleViewerError"

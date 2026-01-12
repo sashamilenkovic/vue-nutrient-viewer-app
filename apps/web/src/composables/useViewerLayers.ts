@@ -1,25 +1,40 @@
-import { ref, watch, type Ref } from 'vue'
-import type { Instance } from '@nutrient-sdk/viewer'
+import { ref, computed } from 'vue'
 
-export interface LayerWithVisibility {
-  ocgId: number
+/**
+ * Instant Layers are annotation containers managed by Document Engine.
+ * Each layer has its own set of annotations, allowing multiple users/roles
+ * to annotate the same document independently.
+ *
+ * Note: This is different from OCG (PDF content) layers, which are not
+ * supported when using Document Engine.
+ */
+
+export interface InstantLayer {
   name: string
-  locked?: boolean
-  visible: boolean
+  displayName: string
+  isDefault: boolean
 }
 
-export function useViewerLayers(options: { instance: Ref<Instance | null> }) {
-  const { instance } = options
+export function useInstantLayers(options: { documentId: () => string | null }) {
+  const { documentId } = options
 
-  const layers = ref<LayerWithVisibility[]>([])
+  const layers = ref<InstantLayer[]>([])
+  const currentLayerName = ref<string | null>(null)
   const isLoading = ref(false)
   const error = ref<Error | null>(null)
-  const hasLayers = ref(false)
 
-  async function refreshLayers() {
-    if (!instance.value) {
+  const hasLayers = computed(() => layers.value.length > 0)
+  const currentLayer = computed(() =>
+    layers.value.find((l) => l.name === currentLayerName.value) || null
+  )
+
+  /**
+   * Fetch all layers for the current document from Document Engine
+   */
+  async function fetchLayers(): Promise<void> {
+    const docId = documentId()
+    if (!docId) {
       layers.value = []
-      hasLayers.value = false
       return
     }
 
@@ -27,125 +42,125 @@ export function useViewerLayers(options: { instance: Ref<Instance | null> }) {
     error.value = null
 
     try {
-      const ocgLayers = await instance.value.getLayers()
-      const visibilityState = await instance.value.getLayersVisibilityState()
-      const visibleIds = new Set(visibilityState.visibleLayerIds)
+      const response = await fetch(`/api/documents/${docId}/layers`)
 
-      layers.value = ocgLayers.map((layer: { ocgId: number; name: string; locked?: boolean }) => ({
-        ocgId: layer.ocgId,
-        name: layer.name,
-        locked: layer.locked,
-        visible: visibleIds.has(layer.ocgId),
+      if (!response.ok) {
+        throw new Error(`Failed to fetch layers: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      const layerNames: string[] = data.layers || []
+
+      layers.value = layerNames.map((name) => ({
+        name,
+        displayName: name === '' ? 'Default' : name,
+        isDefault: name === '',
       }))
 
-      hasLayers.value = ocgLayers.length > 0
+      // Set current layer to default if not set
+      if (currentLayerName.value === null && layers.value.length > 0) {
+        currentLayerName.value = ''
+      }
     } catch (err) {
       error.value = err instanceof Error ? err : new Error(String(err))
       layers.value = []
-      hasLayers.value = false
     } finally {
       isLoading.value = false
     }
   }
 
-  async function setLayerVisibility(ocgId: number, visible: boolean) {
-    if (!instance.value) return
+  /**
+   * Set the current layer. The caller is responsible for reloading the viewer
+   * with the new layer's JWT.
+   */
+  function setCurrentLayer(layerName: string): void {
+    currentLayerName.value = layerName
+  }
+
+  /**
+   * Get a JWT for loading a specific layer.
+   * Returns null if documentId is not set.
+   */
+  async function getLayerJWT(layerName: string): Promise<string | null> {
+    const docId = documentId()
+    if (!docId) return null
 
     try {
-      const currentState = await instance.value.getLayersVisibilityState()
-      const visibleIds = new Set(currentState.visibleLayerIds)
-
-      if (visible) {
-        visibleIds.add(ocgId)
-      } else {
-        visibleIds.delete(ocgId)
-      }
-
-      await instance.value.setLayersVisibilityState({
-        visibleLayerIds: Array.from(visibleIds),
+      const response = await fetch('/api/jwt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: docId,
+          layer: layerName,
+        }),
       })
 
-      const layerIndex = layers.value.findIndex((l) => l.ocgId === ocgId)
-      const existingLayer = layers.value[layerIndex]
-      if (layerIndex !== -1 && existingLayer) {
-        layers.value[layerIndex] = { ...existingLayer, visible }
+      if (!response.ok) {
+        throw new Error(`Failed to get layer JWT: ${response.statusText}`)
       }
+
+      const data = await response.json()
+      return data.jwt
     } catch (err) {
       error.value = err instanceof Error ? err : new Error(String(err))
-      throw error.value
+      return null
     }
   }
 
-  async function toggleLayerVisibility(ocgId: number) {
-    const layer = layers.value.find((l) => l.ocgId === ocgId)
-    if (layer) {
-      await setLayerVisibility(ocgId, !layer.visible)
+  /**
+   * Create a new layer by name.
+   * Layers are created lazily in Document Engine when the first annotation is made.
+   * This function just adds the layer to our local list and returns a JWT for it.
+   */
+  async function createLayer(layerName: string): Promise<string | null> {
+    if (!layerName.trim()) {
+      error.value = new Error('Layer name cannot be empty')
+      return null
     }
+
+    // Check if layer already exists
+    if (layers.value.some((l) => l.name === layerName)) {
+      error.value = new Error(`Layer "${layerName}" already exists`)
+      return null
+    }
+
+    // Add to local list (will be created in DE when first annotation is made)
+    layers.value.push({
+      name: layerName,
+      displayName: layerName,
+      isDefault: false,
+    })
+
+    // Return JWT for the new layer
+    return getLayerJWT(layerName)
   }
 
-  async function showAllLayers() {
-    if (!instance.value || layers.value.length === 0) return
-
-    try {
-      const allIds = layers.value.map((l) => l.ocgId)
-      await instance.value.setLayersVisibilityState({ visibleLayerIds: allIds })
-      layers.value = layers.value.map((layer) => ({ ...layer, visible: true }))
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw error.value
-    }
+  /**
+   * Reset state (call when document changes)
+   */
+  function reset(): void {
+    layers.value = []
+    currentLayerName.value = null
+    error.value = null
   }
-
-  async function hideAllLayers() {
-    if (!instance.value) return
-
-    try {
-      await instance.value.setLayersVisibilityState({ visibleLayerIds: [] })
-      layers.value = layers.value.map((layer) => ({ ...layer, visible: false }))
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw error.value
-    }
-  }
-
-  async function showOnlyLayer(ocgId: number) {
-    if (!instance.value) return
-
-    try {
-      await instance.value.setLayersVisibilityState({ visibleLayerIds: [ocgId] })
-      layers.value = layers.value.map((layer) => ({
-        ...layer,
-        visible: layer.ocgId === ocgId,
-      }))
-    } catch (err) {
-      error.value = err instanceof Error ? err : new Error(String(err))
-      throw error.value
-    }
-  }
-
-  watch(
-    instance,
-    async (newInstance) => {
-      if (newInstance) {
-        await refreshLayers()
-      } else {
-        layers.value = []
-        hasLayers.value = false
-      }
-    },
-    { immediate: true },
-  )
 
   return {
+    // State
     layers,
+    currentLayerName,
+    currentLayer,
     isLoading,
     error,
     hasLayers,
-    refreshLayers,
-    setLayerVisibility,
-    toggleLayerVisibility,
-    showAllLayers,
-    hideAllLayers,
-    showOnlyLayer,
+
+    // Actions
+    fetchLayers,
+    setCurrentLayer,
+    getLayerJWT,
+    createLayer,
+    reset,
   }
 }
+
+// Re-export for backwards compatibility, but this is now deprecated
+export const useViewerLayers = useInstantLayers

@@ -18,10 +18,13 @@ defineProps<{
   currentPage: number
   totalPages: number
   currentDocumentName?: string
+  currentDocumentId?: string | null
+  currentLayer?: string
 }>()
 
 const emit = defineEmits<{
   loadDocumentId: [documentId: string, name: string]
+  switchLayer: [layerName: string]
 }>()
 
 // =============================================================================
@@ -115,12 +118,16 @@ function toggleSection(section: keyof typeof sections.value) {
         :class="{ 'control-panel__heading--collapsed': !sections.layers }"
         @click="toggleSection('layers')"
       >
-        <span>Layers (OCG)</span>
+        <span>Instant Layers</span>
         <span class="control-panel__toggle">{{ sections.layers ? '−' : '+' }}</span>
       </button>
 
       <div v-show="sections.layers" class="control-panel__content">
-        <LayerControls :viewer-instance="viewerInstance" />
+        <LayerControls
+          :document-id="currentDocumentId ?? null"
+          :current-layer="currentLayer"
+          @switch-layer="(layer) => emit('switchLayer', layer)"
+        />
       </div>
     </section>
 
@@ -189,14 +196,14 @@ function toggleSection(section: keyof typeof sections.value) {
 }
 
 .control-panel__content {
-  padding: 0.75rem 1rem 1rem;
+  padding: 1rem 1.25rem 1.25rem;
 }
 
 .control-panel__group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .control-panel__group:last-child {

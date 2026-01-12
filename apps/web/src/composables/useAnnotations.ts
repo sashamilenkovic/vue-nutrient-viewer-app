@@ -16,14 +16,45 @@ export interface CreateTextAnnotationOptions {
   customData?: Record<string, unknown>
 }
 
+export interface CreateImageAnnotationOptions {
+  pageIndex: number
+  imageBlob: Blob
+  position?: { left: number; top: number }
+  width?: number
+}
+
+export type AnnotationMode =
+  | 'INK'
+  | 'TEXT_HIGHLIGHTER'
+  | 'SHAPE_RECTANGLE'
+  | 'SHAPE_ELLIPSE'
+  | 'SHAPE_LINE'
+  | 'SHAPE_POLYLINE'
+  | null
+
 export function useAnnotations(options: { instance: Ref<Instance | null> }) {
   const { instance } = options
 
   const annotations = ref<AnnotationData[]>([])
   const isLoading = ref(false)
   const error = ref<Error | null>(null)
+  const currentMode = ref<AnnotationMode>(null)
 
   const isReady = computed(() => instance.value !== null)
+
+  function setAnnotationMode(mode: AnnotationMode) {
+    if (!instance.value) return
+
+    currentMode.value = mode
+
+    if (mode === null) {
+      // Reset to default pan mode
+      instance.value.setViewState((v) => v.set('interactionMode', window.NutrientViewer.InteractionMode.PAN))
+    } else {
+      const interactionMode = window.NutrientViewer.InteractionMode[mode]
+      instance.value.setViewState((v) => v.set('interactionMode', interactionMode))
+    }
+  }
 
   async function getAnnotations(pageIndex: number): Promise<AnnotationData[]> {
     if (!instance.value) return []
@@ -106,6 +137,55 @@ export function useAnnotations(options: { instance: Ref<Instance | null> }) {
     }
   }
 
+  async function createImageAnnotation(opts: CreateImageAnnotationOptions): Promise<void> {
+    if (!instance.value) {
+      throw new Error('Viewer not initialized')
+    }
+
+    const { pageIndex, imageBlob, position = { left: 50, top: 50 }, width = 200 } = opts
+
+    try {
+      // Calculate aspect ratio from image
+      let aspectRatio = 1
+      if (imageBlob.type.startsWith('image/')) {
+        const url = URL.createObjectURL(imageBlob)
+        const img = new Image()
+        img.src = url
+        await new Promise<void>((resolve) => {
+          img.onload = () => {
+            aspectRatio = img.height / img.width
+            URL.revokeObjectURL(url)
+            resolve()
+          }
+          img.onerror = () => {
+            URL.revokeObjectURL(url)
+            resolve()
+          }
+        })
+      }
+
+      // Create attachment and annotation
+      const imageAttachmentId = await instance.value.createAttachment(imageBlob)
+      const imageAnnotation = new window.NutrientViewer.Annotations.ImageAnnotation({
+        pageIndex,
+        boundingBox: new window.NutrientViewer.Geometry.Rect({
+          left: position.left,
+          top: position.top,
+          width,
+          height: width * aspectRatio,
+        }),
+        imageAttachmentId,
+        contentType: imageBlob.type,
+      })
+
+      await instance.value.create(imageAnnotation)
+      await refreshAnnotations()
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw error.value
+    }
+  }
+
   async function deleteAnnotation(annotationId: string): Promise<void> {
     if (!instance.value) {
       throw new Error('Viewer not initialized')
@@ -138,10 +218,13 @@ export function useAnnotations(options: { instance: Ref<Instance | null> }) {
     annotations,
     isLoading,
     error,
+    currentMode,
+    setAnnotationMode,
     getAnnotations,
     getAllAnnotations,
     refreshAnnotations,
     createTextAnnotation,
+    createImageAnnotation,
     deleteAnnotation,
     exportInstantJson,
     exportXfdf,

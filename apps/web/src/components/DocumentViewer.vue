@@ -8,6 +8,7 @@ type Instance = InstanceType<typeof NutrientViewer.Instance>
 const props = withDefaults(
   defineProps<{
     documentId?: string
+    layer?: string
     serverUrl?: string
     theme?: 'LIGHT' | 'DARK'
   }>(),
@@ -34,7 +35,7 @@ async function loadDocument() {
   if (!containerRef.value || !props.documentId) return
 
   try {
-    await load(containerRef.value, props.documentId)
+    await load(containerRef.value, props.documentId, props.layer)
 
     if (instance.value) {
       emit('loaded', instance.value)
@@ -66,6 +67,16 @@ watch(
   () => props.documentId,
   () => {
     loadDocument()
+  },
+)
+
+// Reload when layer changes
+watch(
+  () => props.layer,
+  () => {
+    if (props.documentId) {
+      loadDocument()
+    }
   },
 )
 

@@ -198,6 +198,63 @@ documentRoutes.post(
 )
 
 /**
+ * GET /api/documents/:id/layers
+ * List all Instant Layers for a document
+ * Instant Layers are annotation containers - each layer has its own set of annotations
+ *
+ * Returns: { layers: string[] }
+ */
+documentRoutes.get(
+  '/api/documents/:id/layers',
+  eventHandler(async (event) => {
+    const documentId = event.context.params?.id
+
+    if (!documentId) {
+      throw createError({
+        statusCode: 400,
+        message: 'Document ID is required',
+      })
+    }
+
+    try {
+      const response = await fetch(`${DE_URL()}/api/documents/${documentId}/layers/`, {
+        headers: {
+          Authorization: `Token token=${DE_AUTH_TOKEN()}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw createError({
+          statusCode: response.status,
+          message: `Document Engine error: ${response.statusText}`,
+        })
+      }
+
+      const data = await response.json()
+      // Document Engine returns { data: ["layer1", "layer2", ...] }
+      // Layers are created lazily, so a new document may have no layers
+      // The default layer is an empty string ""
+      const layers = data.data || []
+
+      // Always include the default layer if not present
+      if (!layers.includes('')) {
+        layers.unshift('')
+      }
+
+      return { layers }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('fetch')) {
+        throw createError({
+          statusCode: 503,
+          message: 'Document Engine not available. Is Docker running?',
+        })
+      }
+      throw error
+    }
+  })
+)
+
+/**
  * DELETE /api/documents/:id
  * Delete a document from Document Engine
  */
