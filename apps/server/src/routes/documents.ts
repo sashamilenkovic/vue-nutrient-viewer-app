@@ -180,8 +180,9 @@ documentRoutes.post(
       }
 
       const data = await response.json()
+      console.log('Document Engine response:', JSON.stringify(data, null, 2))
       return {
-        documentId: data.document_id || data.documentId,
+        documentId: data.data?.document_id || data.document_id || data.documentId,
         originalFilename: filename,
         message: `Document converted from ${ext?.toUpperCase() || 'unknown'} to PDF successfully`,
       }

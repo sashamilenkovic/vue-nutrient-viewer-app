@@ -1,87 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import type { Instance } from '@nutrient-sdk/viewer'
-import DocumentViewer from '@/components/DocumentViewer.vue'
-import ControlPanel from '@/components/ControlPanel.vue'
-
-const viewerRef = ref<InstanceType<typeof DocumentViewer> | null>(null)
-const viewerInstance = ref<Instance | null>(null)
-const currentPage = ref(0)
-const totalPages = ref(0)
-
-// Document source - documentId for Document Engine
-const documentId = ref<string | undefined>(undefined)
-const currentDocumentName = ref('No document loaded')
-
-// Instant Layer - annotation container
-const currentLayer = ref<string | undefined>(undefined)
-
-// Document Engine URL from environment
-const serverUrl = computed(() => import.meta.env.VITE_DE_URL || 'http://localhost:5000')
-
-function handleViewerLoaded(instance: Instance) {
-  viewerInstance.value = instance
-  totalPages.value = instance.totalPageCount
-  currentPage.value = instance.viewState.currentPageIndex
-}
-
-function handleViewerError(error: Error) {
-  console.error('Viewer error:', error)
-}
-
-function handlePageChange(pageIndex: number) {
-  currentPage.value = pageIndex
-}
-
-function handleAnnotationsChange() {
-  console.log('Annotations changed')
-}
-
-function handleLoadDocumentId(id: string, name: string) {
-  documentId.value = id
-  currentDocumentName.value = name
-  // Reset to default layer when loading a new document
-  currentLayer.value = undefined
-}
-
-function handleSwitchLayer(layerName: string) {
-  currentLayer.value = layerName
-}
+import { RouterLink, RouterView } from 'vue-router'
 </script>
 
 <template>
   <div class="app">
     <header class="app__header">
       <h1 class="app__title">Nutrient Viewer Demo</h1>
-      <span class="app__subtitle">Vue Integration POC</span>
+      <nav class="app__nav">
+        <RouterLink to="/" class="nav-link">Viewer</RouterLink>
+        <RouterLink to="/convert" class="nav-link">Conversion</RouterLink>
+      </nav>
     </header>
 
     <main class="app__main">
-      <aside class="app__sidebar">
-        <ControlPanel
-          :viewer-instance="viewerInstance"
-          :current-page="currentPage"
-          :total-pages="totalPages"
-          :current-document-name="currentDocumentName"
-          :current-document-id="documentId"
-          :current-layer="currentLayer"
-          @load-document-id="handleLoadDocumentId"
-          @switch-layer="handleSwitchLayer"
-        />
-      </aside>
-
-      <section class="app__viewer">
-        <DocumentViewer
-          ref="viewerRef"
-          :document-id="documentId"
-          :layer="currentLayer"
-          :server-url="serverUrl"
-          @loaded="handleViewerLoaded"
-          @error="handleViewerError"
-          @page-change="handlePageChange"
-          @annotations-change="handleAnnotationsChange"
-        />
-      </section>
+      <RouterView />
     </main>
   </div>
 </template>
@@ -157,7 +89,7 @@ body {
 .app__header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 2rem;
   height: var(--header-height);
   padding: 0 1.5rem;
   background: var(--color-surface);
@@ -171,31 +103,33 @@ body {
   color: var(--color-text);
 }
 
-.app__subtitle {
-  font-size: 0.875rem;
+.app__nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  text-decoration: none;
   color: var(--color-text-secondary);
-  padding: 0.25rem 0.75rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.nav-link:hover {
   background: var(--color-background);
-  border-radius: var(--radius-sm);
+  color: var(--color-text);
+}
+
+.nav-link.router-link-active {
+  background: var(--color-primary);
+  color: white;
 }
 
 .app__main {
   display: flex;
   flex: 1;
   min-height: 0;
-}
-
-.app__sidebar {
-  width: var(--sidebar-width);
-  flex-shrink: 0;
-  background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
-  overflow-y: auto;
-}
-
-.app__viewer {
-  flex: 1;
-  min-width: 0;
-  background: var(--color-background);
 }
 </style>

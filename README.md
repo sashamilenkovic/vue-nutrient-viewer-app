@@ -6,9 +6,10 @@ A proof-of-concept demonstrating Nutrient Web SDK integration with Vue.js and Do
 
 ### Client-Side (Vue App)
 - Document viewing with Nutrient Web SDK
+- Streaming (automatic with Document Engine)
 - Navigation, zoom, search with highlighting
-- Annotations (create, delete, export)
-- OCG layer management
+- Annotations (create, delete, export with custom data)
+- Instant Layers (annotation grouping for multi-user workflows)
 - Document upload (local files)
 - Event logging
 
@@ -119,10 +120,11 @@ nutrient-viewer-poc/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/jwt` | Generate JWT for document access |
+| POST | `/api/jwt` | Generate JWT for document access (supports `layer` param) |
 | GET | `/api/documents` | List all documents |
 | POST | `/api/documents` | Upload PDF (auto-linearized) |
 | POST | `/api/convert` | Upload & convert Office file to PDF |
+| GET | `/api/documents/:id/layers` | List Instant Layers for a document |
 | DELETE | `/api/documents/:id` | Delete a document |
 
 ## Key Concepts
@@ -142,6 +144,23 @@ Document Engine converts Office formats to PDF server-side:
 - PowerPoint (.pptx, .ppt)
 
 The conversion preserves fonts, layouts, and formatting.
+
+### Instant Layers
+
+Instant Layers are annotation containers managed by Document Engine. Each layer has its own set of annotations, enabling multi-user workflows:
+
+- Multiple reviewers can annotate independently
+- Switch between layers to see different annotation sets
+- Layers are created lazily when first annotation is made
+
+```typescript
+// Generate JWT for a specific layer
+const token = jwt.sign({
+  document_id: documentId,
+  layer: 'reviewer-a',  // Optional: omit for default layer
+  permissions: ['read-document', 'write', 'download'],
+}, privateKey)
+```
 
 ### JWT Authentication
 
@@ -168,10 +187,10 @@ NutrientViewer.load({
 
 The SDK is wrapped in Vue composables for clean integration:
 
-- `useNutrientViewer` - Core viewer lifecycle
+- `useNutrientViewer` - Core viewer lifecycle (supports layer param)
 - `useViewerActions` - Navigation, zoom, search
-- `useAnnotations` - Annotation CRUD
-- `useViewerLayers` - OCG layer management
+- `useAnnotations` - Annotation CRUD with custom data
+- `useInstantLayers` - Instant Layers for annotation grouping
 - `useViewerEvents` - Event subscriptions
 
 ## Development
@@ -215,4 +234,3 @@ docker-compose logs db
 - [Nutrient Web SDK Documentation](https://www.nutrient.io/sdk/web/)
 - [Document Engine Documentation](https://www.nutrient.io/sdk/document-engine/)
 - [Vue.js Documentation](https://vuejs.org/)
-# vue-nutrient-viewer-app

@@ -89,10 +89,7 @@ async function uploadToServer(file: File): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
 
-  const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf')
-  const endpoint = isPdf ? '/api/documents' : '/api/convert'
-
-  const response = await fetch(endpoint, {
+  const response = await fetch('/api/documents', {
     method: 'POST',
     body: formData,
   })
@@ -270,7 +267,7 @@ onMounted(() => {
     <div class="document-selector__group">
       <span class="document-selector__label">Upload File</span>
       <div class="document-selector__hint">
-        Supports PDF, Word, Excel, PowerPoint
+        PDF files only
       </div>
       <div class="document-selector__upload-row">
         <button
@@ -294,7 +291,7 @@ onMounted(() => {
       <input
         ref="fileInputRef"
         type="file"
-        accept=".pdf,.docx,.xlsx,.pptx,.doc,.xls,.ppt"
+        accept=".pdf"
         class="document-selector__file-input"
         @change="handleFileChange"
       />
