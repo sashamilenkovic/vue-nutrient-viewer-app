@@ -1,11 +1,13 @@
 import { ref, onUnmounted } from 'vue'
 import type { Instance } from '@nutrient-sdk/viewer'
 
-export function useNutrientViewer(options: {
-  serverUrl?: string
-  theme?: 'LIGHT' | 'DARK'
-  jwtEndpoint?: string
-} = {}) {
+export function useNutrientViewer(
+  options: {
+    serverUrl?: string
+    theme?: 'LIGHT' | 'DARK'
+    jwtEndpoint?: string
+  } = {}
+) {
   const instance = ref<Instance | null>(null)
   const isLoading = ref(false)
   const error = ref<Error | null>(null)
@@ -13,11 +15,7 @@ export function useNutrientViewer(options: {
   const currentDocumentId = ref<string | null>(null)
   const currentLayer = ref<string | null>(null)
 
-  const {
-    serverUrl: rawServerUrl,
-    theme = 'LIGHT',
-    jwtEndpoint = '/api/jwt',
-  } = options
+  const { serverUrl: rawServerUrl, theme = 'LIGHT', jwtEndpoint = '/api/jwt' } = options
 
   const baseUrl = rawServerUrl || import.meta.env.VITE_DE_URL || 'http://localhost:5000'
   const serverUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
@@ -76,6 +74,7 @@ export function useNutrientViewer(options: {
         documentId,
         authPayload: { jwt },
         instant: true,
+        useCDN: true,
       })
     } catch (err) {
       error.value = err instanceof Error ? err : new Error(String(err))
